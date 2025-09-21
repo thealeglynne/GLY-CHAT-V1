@@ -1,0 +1,24 @@
+fastapi
+uvicorn[standard]
+
+# Manejo de envs
+python-dotenv
+
+# Cliente HTTP
+requests
+
+# Colores en CLI
+colorama
+
+# LangChain y dependencias
+langchain
+langchain-core
+langchain-community
+langchain-huggingface
+langgraph
+
+# Validación de datos
+pydantic
+
+sentencepiece
+ctransformers
