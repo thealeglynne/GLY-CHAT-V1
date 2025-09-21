@@ -2,6 +2,7 @@ python-dotenv
 langgraph
 langchain
 langchain-groq
+langchain_community
 pydantic
 requests
 typing-extensions
