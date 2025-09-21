@@ -27,7 +27,8 @@ app = FastAPI(
 # 2. Middleware CORS
 # ========================
 origins = [
-    "http://localhost:3000",  # Frontend Next.js
+    "https://glynne-sst-ai-hsiy.vercel.app",  # tu frontend
+    "http://localhost:3000",  # opcional para testing local
 ]
 
 app.add_middleware(
