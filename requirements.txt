@@ -4,3 +4,5 @@ langchain-groq
 pydantic
 requests
 typing-extensions
+uvicorn
+fastapi
