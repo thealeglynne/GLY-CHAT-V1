@@ -116,10 +116,20 @@ def generar_auditoria():
     # Llamar LLM principal con fallback
     try:
         respuesta = llm.invoke(prompt_text)
-        return respuesta.content if hasattr(respuesta, "content") else str(respuesta)
+        texto_final = respuesta.content if hasattr(respuesta, "content") else str(respuesta)
     except Exception as e:
         print("❌ Error en Groq LLM:", e)
-        return llm_huggingface_fallback(prompt_text)
+        texto_final = llm_huggingface_fallback(prompt_text)
+
+    # === Limpiar el archivo JSON después de usarlo ===
+    try:
+        with open(json_path, "w", encoding="utf-8") as f:
+            json.dump([], f, ensure_ascii=False, indent=2)
+        print("✅ Archivo de conversación limpiado después de generar la auditoría.")
+    except Exception as e:
+        print("❌ Error al limpiar el archivo JSON:", e)
+
+    return texto_final
 
 # ========================
 # 5. CLI opcional para pruebas
