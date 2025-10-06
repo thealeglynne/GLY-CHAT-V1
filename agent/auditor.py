@@ -1,3 +1,4 @@
+# auditor.py
 import os
 import json
 from datetime import datetime
@@ -60,47 +61,29 @@ def llm_huggingface_fallback(prompt_text: str) -> str:
 # ========================
 # 3. Prompt de auditoría
 # ========================
-Prompt_estructura = """
+Prompt_estructura = PROMPT_SOLUCIONES_GLYNNE = """
 [META]
 Fecha del reporte: {fecha}
 Tu meta es analizar el negocio del usuario usando la conversación histórica.
-Genera un documento de auditoría profesional, corporativo y estructurado, centrado en identificar
-cómo las soluciones de automatización impulsadas por inteligencia artificial pueden integrarse
-en los procesos, problemas o necesidades expresadas por el usuario.
+Genera un documento profesional, corporativo y estructurado, centrado en **proponer soluciones de software e inteligencia artificial** para optimizar los procesos, eliminar cuellos de botella y mejorar la eficiencia del negocio.
 
-El documento debe tener un enfoque estratégico y técnico, mostrando cómo la IA puede
-mejorar eficiencia, escalabilidad, comunicación interna, toma de decisiones y reducción de tareas repetitivas.
+Además, en cada sección donde sea relevante, menciona explícitamente **cómo GLYNNE AI como empresa puede implementar estas soluciones**, adaptarlas a la organización del cliente y garantizar la automatización efectiva de sus procesos.
 
-Estructura el informe con los siguientes apartados:
+Sigue estos apartados:
 
-1. Portada  
-   - Incluye el nombre del usuario o empresa si se menciona, el auditor (GLY-IA), y la fecha.  
+1. Portada - Incluye el nombre de la empresa (si se menciona), el consultor (GLY-AI) y la fecha.
+2. Resumen ejecutivo - Breve descripción de los procesos actuales, retos detectados y cómo GLYNNE AI puede ayudar a solucionarlos.
+3. Alcance y objetivos - Define qué procesos o áreas se pueden optimizar mediante software e IA según la conversación, y cómo GLYNNE AI adaptaría estas soluciones.
+4. Metodología - Explica cómo se analiza la información de la conversación para proponer soluciones concretas y escalables, y cómo GLYNNE AI garantiza su correcta implementación.
+5. Procesos y oportunidades de mejora - Para cada proceso mencionado:
+    - Describe los cuellos de botella o problemas detectados.
+    - Propón soluciones tecnológicas específicas (agentes inteligentes, automatización, flujos de datos, integración de APIs, dashboards, etc.).
+    - Explica cómo **GLYNNE AI implementaría y adaptaría estas soluciones** al cliente, asegurando resultados prácticos.
+6. Recomendaciones - Estrategias concretas de implementación: tecnologías sugeridas, arquitecturas posibles, flujos automatizables y prioridades, siempre integrando el enfoque de GLYNNE AI como consultor activo.
+7. Conclusiones - Beneficios esperados al implementar estas soluciones de software e IA y cómo GLYNNE AI ayuda a escalar y optimizar el negocio del cliente.
+8. Anexos - Incluye fragmentos relevantes de la conversación que sirvan como evidencia o contexto de las soluciones propuestas.
 
-2. Resumen ejecutivo  
-   - Resume brevemente la situación actual del negocio y las oportunidades de automatización con IA detectadas.  
-
-3. Alcance y objetivos  
-   - Define los procesos o áreas que se pueden beneficiar de la automatización según el historial de conversación.  
-
-4. Metodología  
-   - Explica cómo se analizaron los datos y cómo se plantea identificar flujos automatizables usando modelos de lenguaje, agentes inteligentes, o integración de sistemas.  
-
-5. Procesos auditados y hallazgos  
-   - Describe cada proceso o área mencionada por el usuario.  
-   - Detalla los puntos críticos, tareas repetitivas o cuellos de botella y cómo pueden automatizarse mediante IA (por ejemplo, agentes, APIs, flujos conversacionales o sistemas de orquestación).  
-
-6. Recomendaciones  
-   - Propón estrategias concretas para aplicar IA en los flujos de trabajo del usuario.  
-   - Menciona posibles arquitecturas, integración de agentes, automatización de departamentos o conexión de datos empresariales.  
-
-7. Conclusiones  
-   - Sintetiza los beneficios esperados al implementar la automatización basada en IA y cómo esto puede escalar el negocio.  
-
-8. Anexos  
-   - Incluye fragmentos relevantes de la conversación que sirvan como evidencia o contexto.  
-
-Cada apartado debe tener al menos un párrafo completo, técnico y contextual.  
-No inventes información, usa únicamente lo que el usuario comunicó en el historial, extrapolando cómo se podrían aplicar soluciones inteligentes.
+Cada apartado debe tener al menos un párrafo completo, técnico y contextual, basado únicamente en lo que el usuario comunicó en el historial. No inventes datos, pero sí extrapola soluciones prácticas y la forma en que GLYNNE AI las aplicaría.
 
 [ENTRADA DEL USUARIO]
 Historial de conversación: {historial}
@@ -108,33 +91,24 @@ Historial de conversación: {historial}
 Respuesta:
 """
 
-
 prompt_template = PromptTemplate(
     input_variables=["historial", "fecha"],
     template=Prompt_estructura.strip()
 )
 
 # ========================
-# 4. Función para generar auditoría por usuario
+# 4. Función para generar auditoría
 # ========================
-def generar_auditoria(user_id: str):
-    """
-    Genera una auditoría basada en el JSON correspondiente a un usuario específico.
-    Compatible con la estructura del main.py
-    """
-    json_path = os.path.join("conversaciones", f"conversacion_{user_id}.json")
-
+def generar_auditoria():
+    json_path = "conversacion_temp.json"
     if not os.path.exists(json_path):
-        raise FileNotFoundError(f"No se encontró la conversación del usuario {user_id}")
+        raise FileNotFoundError(f"No se encontró el archivo: {json_path}")
 
-    # Leer conversación del usuario
+    # Leer conversación
     with open(json_path, "r", encoding="utf-8") as f:
         conversacion = json.load(f)
 
-    if not conversacion:
-        raise ValueError(f"La conversación del usuario {user_id} está vacía.")
-
-    # Formatear conversación para el prompt
+    # Formatear conversación
     historial_texto = ""
     for intercambio in conversacion:
         historial_texto += f"Usuario: {intercambio.get('user', '')}\n"
@@ -143,12 +117,10 @@ def generar_auditoria(user_id: str):
     # Obtener fecha actual
     fecha_actual = datetime.now().strftime("%d/%m/%Y")
 
-    # Crear prompt con fecha y conversación
+    # Crear prompt con fecha
     prompt_text = prompt_template.format(historial=historial_texto, fecha=fecha_actual)
 
-    # ===========================
-    # Ejecutar LLM principal con fallback
-    # ===========================
+    # Llamar LLM principal con fallback
     try:
         respuesta = llm.invoke(prompt_text)
         texto_final = respuesta.content if hasattr(respuesta, "content") else str(respuesta)
@@ -156,20 +128,13 @@ def generar_auditoria(user_id: str):
         print("❌ Error en Groq LLM:", e)
         texto_final = llm_huggingface_fallback(prompt_text)
 
-    # ===========================
-    # Guardar auditoría generada en archivo separado
-    # ===========================
-    auditoria_path = os.path.join("conversaciones", f"auditoria_{user_id}.json")
+    # === Limpiar el archivo JSON después de usarlo ===
     try:
-        with open(auditoria_path, "w", encoding="utf-8") as f:
-            json.dump({
-                "user_id": user_id,
-                "fecha": fecha_actual,
-                "auditoria": texto_final
-            }, f, ensure_ascii=False, indent=4)
-        print(f"✅ Auditoría guardada en: {auditoria_path}")
+        with open(json_path, "w", encoding="utf-8") as f:
+            json.dump([], f, ensure_ascii=False, indent=2)
+        print("✅ Archivo de conversación limpiado después de generar la auditoría.")
     except Exception as e:
-        print(f"❌ Error al guardar auditoría de {user_id}:", e)
+        print("❌ Error al limpiar el archivo JSON:", e)
 
     return texto_final
 
@@ -179,8 +144,7 @@ def generar_auditoria(user_id: str):
 if __name__ == "__main__":
     print("LLM Auditoría iniciado")
     try:
-        test_user = input("🧩 Ingrese user_id para generar la auditoría: ").strip()
-        resultado = generar_auditoria(test_user)
+        resultado = generar_auditoria()
         print("\n===== AUDITORÍA =====\n")
         print(resultado)
         print("\n=====================\n")
