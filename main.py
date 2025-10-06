@@ -11,10 +11,10 @@ import traceback
 # Importamos el agente desde tu script
 from agent.chat import agente_node, get_memory, State, TEMP_JSON_PATH
 
-# 🚀 Importar función de auditoría
+# Importar función de auditoría
 from agent.auditor import generar_auditoria as auditor_llm
 
-# 🚀 Importar generador de ecosistema
+# Importar generador de ecosistema
 from agent.diagrama import generar_ecosistema
 
 # ========================
@@ -113,7 +113,7 @@ def reset_conversacion():
 # 5. Endpoint Auditoría
 # ========================
 @app.post("/generar_auditoria")
-def generar_auditoria(user_id: str):
+def generar_auditoria_endpoint(user_id: str):
     """
     Genera auditoría real llamando al LLM con la conversación
     y también genera el ecosistema de nodos.
@@ -126,7 +126,7 @@ def generar_auditoria(user_id: str):
         resultado_auditoria = auditor_llm()
 
         # 2️⃣ Generar ecosistema con base en la auditoría
-        resultado_ecosistema = generar_ecosistema(json.dumps(resultado_auditoria, ensure_ascii=False))
+        resultado_ecosistema = generar_ecosistema(resultado_auditoria)  # pasa dict directamente
 
         return {
             "mensaje": "✅ Auditoría y Ecosistema generados correctamente",
@@ -141,7 +141,7 @@ def generar_auditoria(user_id: str):
 
 
 # ========================
-# 6. Nuevo endpoint JSON (solo auditoría en JSON)
+# 6. Endpoint JSON (solo auditoría)
 # ========================
 @app.get("/generar_auditoria/json")
 def generar_auditoria_json():
@@ -167,7 +167,7 @@ def generar_auditoria_json():
 
 
 # ========================
-# 7. NUEVO ENDPOINT: Generar Ecosistema de nodos
+# 7. Endpoint: Generar Ecosistema de nodos
 # ========================
 @app.post("/generar_ecosistema")
 def generar_ecosistema_endpoint():
@@ -189,10 +189,11 @@ def generar_ecosistema_endpoint():
         # Formatear conversación en texto
         historial_texto = ""
         for intercambio in conversacion:
-            historial_texto += f"Usuario: {intercambio.get('user', '')}\n"
-            historial_texto += f"GLY-AI: {intercambio.get('ai', '')}\n"
+            if isinstance(intercambio, dict):
+                historial_texto += f"Usuario: {intercambio.get('user', '')}\n"
+                historial_texto += f"GLY-AI: {intercambio.get('ai', '')}\n"
 
-        # 🔥 Generar ecosistema
+        # Generar ecosistema
         resultado_ecosistema = generar_ecosistema(historial_texto)
 
         return {

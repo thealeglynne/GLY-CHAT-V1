@@ -30,22 +30,17 @@ llm = ChatGroq(
 )
 
 # ========================
-# 2b. LLM de fallback Hugging Face vía API
+# 2b. Fallback Hugging Face
 # ========================
 def llm_huggingface_fallback(prompt_text: str) -> str:
-    """
-    Fallback a Hugging Face usando API Key
-    """
     try:
         from transformers import pipeline
-
         generator = pipeline(
             "text-generation",
             model="tiiuae/falcon-7b-instruct",
             device=-1,
             use_auth_token=hf_api_key
         )
-
         output = generator(
             prompt_text,
             max_length=500,
@@ -53,7 +48,6 @@ def llm_huggingface_fallback(prompt_text: str) -> str:
             top_p=0.95
         )
         return output[0]["generated_text"]
-
     except Exception as e:
         print("❌ Error fallback Hugging Face:", e)
         return "Lo siento, no pude generar la auditoría."
@@ -61,7 +55,7 @@ def llm_huggingface_fallback(prompt_text: str) -> str:
 # ========================
 # 3. Prompt de auditoría
 # ========================
-Prompt_estructura = PROMPT_SOLUCIONES_GLYNNE = """
+PROMPT_SOLUCIONES_GLYNNE = """
 [META]
 Fecha del reporte: {fecha}
 Tu meta es analizar el negocio del usuario usando la conversación histórica.
@@ -93,7 +87,7 @@ Respuesta:
 
 prompt_template = PromptTemplate(
     input_variables=["historial", "fecha"],
-    template=Prompt_estructura.strip()
+    template=PROMPT_SOLUCIONES_GLYNNE.strip()
 )
 
 # ========================
@@ -111,8 +105,9 @@ def generar_auditoria():
     # Formatear conversación
     historial_texto = ""
     for intercambio in conversacion:
-        historial_texto += f"Usuario: {intercambio.get('user', '')}\n"
-        historial_texto += f"GLY-AI: {intercambio.get('ai', '')}\n"
+        if isinstance(intercambio, dict):
+            historial_texto += f"Usuario: {intercambio.get('user', '')}\n"
+            historial_texto += f"GLY-AI: {intercambio.get('ai', '')}\n"
 
     # Obtener fecha actual
     fecha_actual = datetime.now().strftime("%d/%m/%Y")
@@ -128,7 +123,7 @@ def generar_auditoria():
         print("❌ Error en Groq LLM:", e)
         texto_final = llm_huggingface_fallback(prompt_text)
 
-    # === Limpiar el archivo JSON después de usarlo ===
+    # Limpiar el archivo JSON después de usarlo
     try:
         with open(json_path, "w", encoding="utf-8") as f:
             json.dump([], f, ensure_ascii=False, indent=2)
@@ -139,7 +134,7 @@ def generar_auditoria():
     return texto_final
 
 # ========================
-# 5. CLI opcional para pruebas
+# 5. CLI opcional
 # ========================
 if __name__ == "__main__":
     print("LLM Auditoría iniciado")
