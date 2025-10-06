@@ -26,11 +26,11 @@ llm = ChatGroq(
     model="Llama-3.1-8B-Instant",
     api_key=api_key,
     temperature=0.7,
-    max_tokens=1500
+
 )
 
 # ========================
-# 2b. LLM de fallback Hugging Face vía API
+# 2b. LLM de fallback Hugging Face vía APIs
 # ========================
 def llm_huggingface_fallback(prompt_text: str) -> str:
     """
@@ -64,25 +64,28 @@ def llm_huggingface_fallback(prompt_text: str) -> str:
 Prompt_estructura = """
 [META]
 Fecha del reporte: {fecha}
-Tu meta es analizar el negocio del usuario usando la conversación histórica.
-Genera un documento de auditoría profesional, corporativo y estructurado, con los siguientes apartados:
 
-1. Portada (empresa, auditor, fecha)
-2. Resumen ejecutivo
-3. Alcance y objetivos
-4. Metodología
-5. Procesos auditados y hallazgos (incluye evidencia de la conversación)
-6. Recomendaciones
-7. Conclusiones
-8. Anexos (fragmentos de la conversación relevantes)
+Tu meta es analizar el negocio del usuario usando únicamente la información proporcionada en la conversación histórica. Genera un documento profesional y corporativo, **estrictamente enfocado en cómo mejorar los procesos del negocio mediante software personalizado e inteligencia artificial para automatización**. No incluyas información sobre la conversación en sí, ni sobre cómo se hizo la auditoría. Solo centra el documento en soluciones.
 
-Cada apartado debe tener al menos un párrafo completo, explicando claramente la situación, impacto y posibles mejoras. No inventes datos, usa la información proporcionada en el historial de conversación.
+El documento debe tener los siguientes apartados:
+
+1. **Portada**: nombre de la empresa del usuario, auditor (GLYNNE), fecha.
+2. **Resumen ejecutivo**: breve descripción de los problemas actuales del negocio y cómo un software impulsado por IA puede generar mejoras significativas.
+3. **Alcance y objetivos**: delimitar los procesos que podrían beneficiarse de la automatización y la optimización con IA, y los objetivos de la implementación.
+4. **Metodología**: enfoque propuesto para el desarrollo e implementación del software de automatización, incluyendo análisis de procesos, diseño de arquitectura modular, integración de IA, y seguimiento.
+5. **Procesos auditados y hallazgos**: identificar los procesos críticos que presentan problemas o ineficiencias, el impacto de esos problemas y cómo la automatización mediante IA puede resolverlos.
+6. **Recomendaciones**: propuestas concretas de soluciones a medida, integraciones de IA, nodos inteligentes, agentes autónomos y mejoras de flujo de trabajo.
+7. **Conclusiones**: beneficios esperados del software a medida, eficiencia, reducción de errores, y optimización de procesos.
+8. **Anexos**: evidencia relevante de los puntos mencionados (solo fragmentos de información del usuario que respalden las soluciones propuestas).
+9.minimo 9 parrafos bien estructurados 
+Cada apartado debe tener al menos un párrafo completo, explicando claramente la situación, impacto y posibles mejoras. **No inventes datos**. Usa solo la información proporcionada por el usuario en el historial de conversación.
 
 [ENTRADA DEL USUARIO]
 Historial de conversación: {historial}
 
 Respuesta:
 """
+
 
 prompt_template = PromptTemplate(
     input_variables=["historial", "fecha"],
