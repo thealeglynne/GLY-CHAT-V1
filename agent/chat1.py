@@ -1,7 +1,9 @@
-
-import os, random
+import os
+import random
+import json
 from dotenv import load_dotenv
 from typing import TypedDict
+from datetime import datetime
 from langgraph.graph import StateGraph, END
 from langchain_groq import ChatGroq
 from langchain.prompts import PromptTemplate
@@ -19,32 +21,24 @@ llm = ChatGroq(
     model="llama-3.3-70b-versatile",
     api_key=api_key,
     temperature=0.4,
+     
 )
 
 # ========================
-# 2. Prompt
+# 2. Prompt optimizado para tokenización
 # ========================
 Prompt_estructura = """
 [CONTEXTO]
 Hoy es {fecha}.
 Eres GLY-AI, un modelo de inteligencia artificial desarrollado por GLYNNE S.A.S.
-Tu rol es ser un guía experto en todo lo relacionado con inteligencia artificial: responder dudas, explicar conceptos, orientar sobre herramientas y tendencias.
-No estás recolectando información del usuario; tu objetivo es conversar de forma natural y fluida, generando una interacción amigable y educativa.
-Si el usuario menciona procesos de automatización empresarial, sugiere el uso de nuestro módulo de análisis y generación de auditorías.
-Si habla sobre bases de datos o manejo de datos, sugiere nuestro analizador de DB.
-
-Responde de forma natural y conversacional:
-- Mantén la conversación guiada hacia temas de IA.
-- Introduce preguntas tuyas únicamente si ayudan a profundizar o aclarar conceptos.
-- Si hay resultados de búsqueda disponibles, intégralos sin sonar forzado.
-- Si no hay resultados de búsqueda, responde con tu conocimiento previo, indicando brevemente si puede estar desactualizado.
-- Prioriza claridad, utilidad y concisión, evitando advertencias repetitivas innecesarias.
-
-[BUSQUEDA WEB]
-{busqueda}
-
+Tu rol es ser un guía experto en inteligencia artificial: responder dudas, explicar conceptos y orientar sobre herramientas y tendencias. No recolectas información del usuario; solo conversas de forma natural y fluida.
+contesta con uun maximo de 100 palabras 
+si el usuario dice que quiere automatizar procesos empresariales sugiere la herramienta de auditoria de GLY ai informa que esta en el + de el input 
+si menciona algo relacionado a bases de datos recomiendale que gly le analiza sus datos a prrofundiidad ai informa que esta en el + de el input 
+si el usuario habla de aprender ia a demas de darle contexto le informas que en GLYNNE COLLEGE puede aprender desde ciencia de datos hasta desarrollo de prrocesos de automatizacion con procesos cognitivos de ia pasa este link solo cuando lo mnciopnes 'https://www.glynneai.com/glynneColege'
+si pregunta sobre GLYNNE somos una empresa dedicada al desarrollo de infraestructura de software para la automatizacion de procesos en si desarrollamos iinteligencia artificial de todo tipo empresarial  
 [MEMORIA]
-{historial}
+Últimos 3 mensajes: {historial}
 
 [ENTRADA DEL USUARIO]
 Consulta: {mensaje}
@@ -52,9 +46,8 @@ Consulta: {mensaje}
 [RESPUESTA COMO {rol}]
 """
 
-
 prompt = PromptTemplate(
-    input_variables=["rol", "mensaje", "historial"],
+    input_variables=["rol", "mensaje", "historial", "fecha"],
     template=Prompt_estructura.strip(),
 )
 
@@ -66,39 +59,80 @@ class State(TypedDict):
     rol: str
     historial: str
     respuesta: str
+    user_id: str
 
 # memoria por usuario
 usuarios = {}
 
 def get_memory(user_id: str):
     if user_id not in usuarios:
+        # limitar memoria para reducir tokens: solo últimos 3 mensajes
         usuarios[user_id] = ConversationBufferMemory(
-            memory_key="historial", input_key="mensaje"
+            memory_key="historial",
+            input_key="mensaje",
+            output_key="respuesta",
+            k=3
         )
     return usuarios[user_id]
 
 # ========================
-# 4. Nodo principal
+# 4. Función de almacenamiento temporal en JSON
+# ========================
+TEMP_JSON_PATH = "conversacion_temp.json"
+
+if not os.path.exists(TEMP_JSON_PATH):
+    with open(TEMP_JSON_PATH, "w", encoding="utf-8") as f:
+        json.dump([], f)
+
+def guardar_conversacion(user_msg: str, ai_resp: str):
+    with open(TEMP_JSON_PATH, "r+", encoding="utf-8") as f:
+        try:
+            data = json.load(f)
+            if not isinstance(data, list):
+                data = []
+        except json.JSONDecodeError:
+            data = []
+        data.append({"user": user_msg, "ai": ai_resp})
+        f.seek(0)
+        json.dump(data, f, ensure_ascii=False, indent=2)
+        f.truncate()
+
+# ========================
+# 5. Nodo principal
 # ========================
 def agente_node(state: State) -> State:
     memory = get_memory(state.get("user_id", "default"))
     historial = memory.load_memory_variables({}).get("historial", "")
 
+    # limitar historial a últimos 3 mensajes (si k falla)
+    if historial:
+        lineas = historial.strip().split("\n")
+        if len(lineas) > 6:  # cada intercambio ≈ 2 líneas
+            historial = "\n".join(lineas[-6:])
+
+    fecha_actual = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
     texto_prompt = prompt.format(
-        rol=state["rol"], mensaje=state["mensaje"], historial=historial
+        rol=state["rol"],
+        mensaje=state["mensaje"],
+        historial=historial,
+        fecha=fecha_actual
     )
+
     respuesta = llm.invoke(texto_prompt).content
 
     # guardar en memoria
     memory.save_context({"mensaje": state["mensaje"]}, {"respuesta": respuesta})
 
-    # actualizar estado
+    # guardar en JSON temporal
+    guardar_conversacion(state["mensaje"], respuesta)
+
     state["respuesta"] = respuesta
     state["historial"] = historial
     return state
 
 # ========================
-# 5. Construcción del grafo
+# 6. Construcción del grafo
 # ========================
 workflow = StateGraph(State)
 workflow.add_node("agente", agente_node)
@@ -107,42 +141,11 @@ workflow.add_edge("agente", END)
 app = workflow.compile()
 
 # ========================
-# 6. CLI interactiva
+# 7. CLI interactiva
 # ========================
 print("LLM iniciado con LangGraph")
-
-roles = {
-    "auditor": "actua como un auditor empresarial...",
-    "desarrollador": "explica con detalle técnico...",
-    "vendedor": "vende software con mala técnica...",
-}
 
 user_id = str(random.randint(10000, 90000))
 print(f"tu user id es {user_id}")
 
 rol = "auditor"
-
-while True:
-    try:
-        user_input = input("Tu: ")
-        if user_input.lower() == "salir":
-            break
-
-        if user_input.startswith("/rol "):
-            nuevo_rol = user_input.split("/rol ", 1)[1].lower().strip()
-            if nuevo_rol in roles:
-                rol = nuevo_rol
-                print(f"✅ tu nuevo rol es {nuevo_rol}")
-            else:
-                print("⚠️ rol no disponible")
-            continue
-
-        # ejecutar grafo
-        result = app.invoke(
-            {"mensaje": user_input, "rol": rol, "historial": "", "user_id": user_id}
-        )
-        print("LLM:", result["respuesta"])
-        print("📝 memoria:", get_memory(user_id).load_memory_variables({}))
-    except Exception as e:
-        print("❌ Error:", str(e))
-        break

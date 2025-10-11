@@ -80,7 +80,7 @@ def chat(request: ChatRequest):
         raise HTTPException(status_code=500, detail=f"Error interno: {str(e)}")
 
 # ========================
-# 6. Endpoints Chat alternativo (agent/chat1.py)
+# 6. Endpoints Chat alternativo (agent/chat1.py) - CORREGIDO
 # ========================
 @app.post("/chat1", response_model=ChatResponse)
 def chat1(request: ChatRequest):
@@ -97,8 +97,19 @@ def chat1(request: ChatRequest):
     }
 
     try:
+        # Protección extra contra errores de memoria
+        memory = get_memory_alt(request.user_id)
+        if memory is None:
+            raise Exception(f"Memoria no inicializada para user_id {request.user_id}")
+
+        # Llamada al agente
         result = agente_node_alt(state)
-        memoria = get_memory_alt(request.user_id).load_memory_variables({})
+
+        # Obtener historial seguro
+        memoria = memory.load_memory_variables({})
+        if memoria is None:
+            memoria = {}
+
         return ChatResponse(respuesta=result.get("respuesta", ""), historial=memoria)
 
     except Exception as e:
