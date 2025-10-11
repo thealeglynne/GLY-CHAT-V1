@@ -8,27 +8,28 @@ import os
 import json
 import traceback
 
-# Importamos el agente desde tu script
+# ========================
+# 1. Importaciones de agentes
+# ========================
 from agent.chat import agente_node, get_memory, State, TEMP_JSON_PATH
-
-# 🚀 Importar función de auditoría
+from agent.chat1 import agente_node as agente_node_alt, get_memory as get_memory_alt
 from agent.auditor import generar_auditoria as auditor_llm
 
 # ========================
-# 1. Inicialización FastAPI
+# 2. Inicialización FastAPI
 # ========================
 app = FastAPI(
     title="GLYNNE LLM API",
-    description="API para interactuar con GLY-AI mediante LangGraph",
-    version="1.0"
+    description="API para interactuar con los agentes de GLY-AI (LangGraph, Auditoría, Chat1)",
+    version="2.0"
 )
 
 # ========================
-# 2. Middleware CORS
+# 3. Middleware CORS
 # ========================
 origins = [
-    "https://glynne-sst-ai-hsiy.vercel.app",  # tu frontend
-    "http://localhost:3000",  # opcional para testing local
+    "https://glynne-sst-ai-hsiy.vercel.app",
+    "http://localhost:3000",  # para pruebas locales
 ]
 
 app.add_middleware(
@@ -40,22 +41,23 @@ app.add_middleware(
 )
 
 # ========================
-# 3. Modelo de datos
+# 4. Modelos de datos
 # ========================
 class ChatRequest(BaseModel):
     mensaje: str
     rol: Optional[str] = "auditor"
-    user_id: str  # obligatorio desde frontend
+    user_id: str  # obligatorio
 
 class ChatResponse(BaseModel):
     respuesta: str
     historial: dict
 
 # ========================
-# 4. Endpoints Chat
+# 5. Endpoints Chat principal (agent/chat.py)
 # ========================
 @app.post("/chat", response_model=ChatResponse)
 def chat(request: ChatRequest):
+    """Chat principal basado en agent/chat.py"""
     if not request.user_id:
         raise HTTPException(status_code=400, detail="user_id es obligatorio")
 
@@ -77,7 +79,36 @@ def chat(request: ChatRequest):
         print(traceback.format_exc())
         raise HTTPException(status_code=500, detail=f"Error interno: {str(e)}")
 
+# ========================
+# 6. Endpoints Chat alternativo (agent/chat1.py)
+# ========================
+@app.post("/chat1", response_model=ChatResponse)
+def chat1(request: ChatRequest):
+    """Chat alternativo basado en agent/chat1.py (proceso separado)"""
+    if not request.user_id:
+        raise HTTPException(status_code=400, detail="user_id es obligatorio")
 
+    state: State = {
+        "mensaje": request.mensaje,
+        "rol": request.rol,
+        "historial": "",
+        "respuesta": "",
+        "user_id": request.user_id
+    }
+
+    try:
+        result = agente_node_alt(state)
+        memoria = get_memory_alt(request.user_id).load_memory_variables({})
+        return ChatResponse(respuesta=result.get("respuesta", ""), historial=memoria)
+
+    except Exception as e:
+        print("❌ Error en /chat1 endpoint:")
+        print(traceback.format_exc())
+        raise HTTPException(status_code=500, detail=f"Error interno: {str(e)}")
+
+# ========================
+# 7. Endpoint para obtener memoria por usuario
+# ========================
 @app.get("/user/{user_id}/memory")
 def get_user_memory(user_id: str):
     try:
@@ -88,7 +119,9 @@ def get_user_memory(user_id: str):
         print(traceback.format_exc())
         raise HTTPException(status_code=500, detail=f"Error interno: {str(e)}")
 
-
+# ========================
+# 8. Endpoint reset de conversación temporal
+# ========================
 @app.get("/reset")
 def reset_conversacion():
     """Elimina el JSON temporal y reinicia memoria"""
@@ -97,29 +130,33 @@ def reset_conversacion():
             os.remove(TEMP_JSON_PATH)
         with open(TEMP_JSON_PATH, "w", encoding="utf-8") as f:
             json.dump([], f)
-        for user_id in list(get_memory.__defaults__[0].keys()) if get_memory.__defaults__ else []:
-            get_memory(user_id).clear()
-        return {"status": "ok", "message": "Conversación temporal reiniciada"}
+
+        # Reiniciar memorias de ambos agentes
+        for get_mem_func in [get_memory, get_memory_alt]:
+            try:
+                usuarios = get_mem_func.__defaults__[0] if get_mem_func.__defaults__ else {}
+                for user_id in list(usuarios.keys()):
+                    get_mem_func(user_id).clear()
+            except Exception:
+                pass
+
+        return {"status": "ok", "message": "Conversaciones temporales reiniciadas"}
     except Exception as e:
         print("❌ Error en /reset endpoint:")
         print(traceback.format_exc())
         raise HTTPException(status_code=500, detail=f"Error interno: {str(e)}")
 
-
 # ========================
-# 5. Endpoint Auditoría
+# 9. Endpoint Auditoría
 # ========================
 @app.post("/generar_auditoria")
 def generar_auditoria(user_id: str):
-    """
-    Genera auditoría real llamando al LLM con la conversación.
-    """
+    """Genera auditoría llamando al agente de auditoría"""
     try:
         if not os.path.exists(TEMP_JSON_PATH):
             raise HTTPException(status_code=404, detail="No hay conversación para generar auditoría")
 
         resultado = auditor_llm()
-
         return {
             "mensaje": "✅ Auditoría generada correctamente",
             "auditoria": resultado
@@ -130,22 +167,17 @@ def generar_auditoria(user_id: str):
         print(traceback.format_exc())
         raise HTTPException(status_code=500, detail=f"Error interno: {str(e)}")
 
-
 # ========================
-# 6. Nuevo endpoint JSON
+# 10. Endpoint Auditoría JSON
 # ========================
 @app.get("/generar_auditoria/json")
 def generar_auditoria_json():
-    """
-    Devuelve la misma auditoría pero directamente en formato JSON.
-    """
+    """Devuelve la auditoría directamente en formato JSON"""
     try:
         if not os.path.exists(TEMP_JSON_PATH):
             raise HTTPException(status_code=404, detail="No hay conversación para generar auditoría")
 
         resultado = auditor_llm()
-
-        # Guardar temporalmente en JSON por si se necesita
         with open(TEMP_JSON_PATH, "w", encoding="utf-8") as f:
             json.dump(resultado, f, ensure_ascii=False, indent=4)
 
@@ -156,9 +188,9 @@ def generar_auditoria_json():
         print(traceback.format_exc())
         raise HTTPException(status_code=500, detail=f"Error interno: {str(e)}")
 
-
 # ========================
-# 7. Entrypoint uvicorn
+# 11. Entrypoint Uvicorn
 # ========================
 if __name__ == "__main__":
+    print("🚀 Servidor GLYNNE API corriendo con soporte para múltiples agentes")
     uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True)
