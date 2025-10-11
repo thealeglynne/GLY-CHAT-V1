@@ -1,4 +1,5 @@
-import os, random, requests, datetime
+
+import os, random
 from dotenv import load_dotenv
 from typing import TypedDict
 from langgraph.graph import StateGraph, END
@@ -11,13 +12,8 @@ from langchain.memory import ConversationBufferMemory
 # ========================
 load_dotenv()
 api_key = os.getenv("GROQ_API_KEY")
-serper_api_key = os.getenv("SERPER_API_KEY")
-
 if not api_key:
-    raise ValueError("en el .env no hay una api valida de GROQ")
-
-if not serper_api_key:
-    raise ValueError("en el .env no hay una api valida de SERPER")
+    raise ValueError("en el .env no hay una api valida")
 
 llm = ChatGroq(
     model="llama-3.3-70b-versatile",
@@ -58,7 +54,7 @@ Consulta: {mensaje}
 
 
 prompt = PromptTemplate(
-    input_variables=["rol", "mensaje", "historial", "busqueda", "fecha"],
+    input_variables=["rol", "mensaje", "historial"],
     template=Prompt_estructura.strip(),
 )
 
@@ -70,9 +66,8 @@ class State(TypedDict):
     rol: str
     historial: str
     respuesta: str
-    busqueda: str
-    user_id: str
 
+# memoria por usuario
 usuarios = {}
 
 def get_memory(user_id: str):
@@ -83,84 +78,71 @@ def get_memory(user_id: str):
     return usuarios[user_id]
 
 # ========================
-# 4. Nodo de búsqueda Serper
-# ========================
-def serper_node(state: State) -> State:
-    try:
-        q = state.get("mensaje", "")
-        headers = {"X-API-KEY": serper_api_key, "Content-Type": "application/json"}
-        resp = requests.post(
-            "https://google.serper.dev/search",
-            headers=headers,
-            json={"q": q},
-        )
-        data = resp.json()
-        if "organic" in data and len(data["organic"]) > 0:
-            resumen = [
-                f"{item.get('title')} - {item.get('link','')}"
-                for item in data["organic"][:3]
-            ]
-            state["busqueda"] = " | ".join(resumen)
-        else:
-            state["busqueda"] = "No hubo resultados"
-    except Exception as e:
-        state["busqueda"] = f"Error en búsqueda: {e}"
-    
-    print("DEBUG búsqueda:", state["busqueda"])  # 👈 Debug
-    return state
-
-# ========================
-# 5. Nodo agente (usa búsqueda + historial)
+# 4. Nodo principal
 # ========================
 def agente_node(state: State) -> State:
     memory = get_memory(state.get("user_id", "default"))
     historial = memory.load_memory_variables({}).get("historial", "")
-    fecha = datetime.date.today().strftime("%d/%m/%Y")
-
-    # 🔑 Lógica: decidir si activar búsqueda
-    activar_busqueda = any(
-        palabra in state["mensaje"].lower()
-        for palabra in ["quién", "cuándo", "actual", "último", "presidente", "hoy", "noticia", "última hora"]
-    )
-
-    if activar_busqueda:
-        state = serper_node(state)  # ejecuta búsqueda solo si hace falta
-
-  
 
     texto_prompt = prompt.format(
-        rol=state["rol"],
-        mensaje=state["mensaje"],
-        historial=historial,
-        busqueda=state.get("busqueda", ""),
-        fecha=fecha,
+        rol=state["rol"], mensaje=state["mensaje"], historial=historial
     )
     respuesta = llm.invoke(texto_prompt).content
 
-    # Guardar en memoria
+    # guardar en memoria
     memory.save_context({"mensaje": state["mensaje"]}, {"respuesta": respuesta})
 
+    # actualizar estado
     state["respuesta"] = respuesta
     state["historial"] = historial
     return state
 
 # ========================
-# 6. Grafo
+# 5. Construcción del grafo
 # ========================
 workflow = StateGraph(State)
-workflow.add_node("serper", serper_node)
 workflow.add_node("agente", agente_node)
-
-workflow.set_entry_point("agente")   # 👈 ahora empieza en el agente
+workflow.set_entry_point("agente")
 workflow.add_edge("agente", END)
-
 app = workflow.compile()
 
 # ========================
-# 7. CLI
+# 6. CLI interactiva
 # ========================
-print("LLM iniciado con LangGraph + Serper dinámico")
+print("LLM iniciado con LangGraph")
+
+roles = {
+    "auditor": "actua como un auditor empresarial...",
+    "desarrollador": "explica con detalle técnico...",
+    "vendedor": "vende software con mala técnica...",
+}
+
 user_id = str(random.randint(10000, 90000))
-rol = "auditor"
 print(f"tu user id es {user_id}")
 
+rol = "auditor"
+
+while True:
+    try:
+        user_input = input("Tu: ")
+        if user_input.lower() == "salir":
+            break
+
+        if user_input.startswith("/rol "):
+            nuevo_rol = user_input.split("/rol ", 1)[1].lower().strip()
+            if nuevo_rol in roles:
+                rol = nuevo_rol
+                print(f"✅ tu nuevo rol es {nuevo_rol}")
+            else:
+                print("⚠️ rol no disponible")
+            continue
+
+        # ejecutar grafo
+        result = app.invoke(
+            {"mensaje": user_input, "rol": rol, "historial": "", "user_id": user_id}
+        )
+        print("LLM:", result["respuesta"])
+        print("📝 memoria:", get_memory(user_id).load_memory_variables({}))
+    except Exception as e:
+        print("❌ Error:", str(e))
+        break
