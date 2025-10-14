@@ -75,7 +75,7 @@ def get_memory(user_id: str):
 # ========================
 # 4. Función de almacenamiento temporal en JSON
 # ========================
-TEMP_JSON_PATH = "conversacion_temp.json"
+TEMP_JSON_PATH = "conversacion_temp2.json"
 
 if not os.path.exists(TEMP_JSON_PATH):
     with open(TEMP_JSON_PATH, "w", encoding="utf-8") as f:

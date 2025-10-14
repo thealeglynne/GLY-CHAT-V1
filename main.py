@@ -198,6 +198,126 @@ def generar_auditoria_json():
         print("❌ Error en /generar_auditoria/json endpoint:")
         print(traceback.format_exc())
         raise HTTPException(status_code=500, detail=f"Error interno: {str(e)}")
+    
+# ========================
+# 12. Importaciones de agentes secundarios (agent2)
+# ========================
+from agent2.chat import agente_node as agente2_node, get_memory as get_memory2, State as State2, TEMP_JSON_PATH as TEMP_JSON_PATH2
+from agent2.auditor import generar_auditoria as auditor_llm2
+
+# ========================
+# 13. Endpoints Chat principal (agent2/chat.py)
+# ========================
+@app.post("/chat2", response_model=ChatResponse)
+def chat2(request: ChatRequest):
+    """Chat principal basado en agent2/chat.py"""
+    if not request.user_id:
+        raise HTTPException(status_code=400, detail="user_id es obligatorio")
+
+    state: State2 = {
+        "mensaje": request.mensaje,
+        "rol": request.rol,
+        "historial": "",
+        "respuesta": "",
+        "user_id": request.user_id
+    }
+
+    try:
+        result = agente2_node(state)
+        memoria = get_memory2(request.user_id).load_memory_variables({})
+        return ChatResponse(respuesta=result.get("respuesta", ""), historial=memoria)
+
+    except Exception as e:
+        print("❌ Error en /chat2 endpoint:")
+        print(traceback.format_exc())
+        raise HTTPException(status_code=500, detail=f"Error interno: {str(e)}")
+
+
+# ========================
+# 14. Endpoint para obtener memoria (agent2)
+# ========================
+@app.get("/user2/{user_id}/memory")
+def get_user2_memory(user_id: str):
+    """Obtiene la memoria del usuario en agent2"""
+    try:
+        memoria = get_memory2(user_id).load_memory_variables({})
+        return {"user_id": user_id, "historial": memoria}
+    except Exception as e:
+        print("❌ Error en /user2/{user_id}/memory:")
+        print(traceback.format_exc())
+        raise HTTPException(status_code=500, detail=f"Error interno: {str(e)}")
+
+
+# ========================
+# 15. Endpoint reset de conversación (agent2)
+# ========================
+@app.get("/reset2")
+def reset_conversacion2():
+    """Elimina el JSON temporal y reinicia memoria en agent2"""
+    try:
+        if os.path.exists(TEMP_JSON_PATH2):
+            os.remove(TEMP_JSON_PATH2)
+        with open(TEMP_JSON_PATH2, "w", encoding="utf-8") as f:
+            json.dump([], f)
+
+        # Reiniciar memorias del agente 2
+        try:
+            usuarios = get_memory2.__defaults__[0] if get_memory2.__defaults__ else {}
+            for user_id in list(usuarios.keys()):
+                get_memory2(user_id).clear()
+        except Exception:
+            pass
+
+        return {"status": "ok", "message": "Conversaciones agent2 reiniciadas"}
+    except Exception as e:
+        print("❌ Error en /reset2 endpoint:")
+        print(traceback.format_exc())
+        raise HTTPException(status_code=500, detail=f"Error interno: {str(e)}")
+
+
+# ========================
+# 16. Endpoint Documento Estratégico (agent2)
+# ========================
+@app.post("/generar_plan")
+def generar_plan(user_id: str):
+    """Genera el plan estratégico personalizado basado en agent2/auditor.py"""
+    try:
+        if not os.path.exists(TEMP_JSON_PATH2):
+            raise HTTPException(status_code=404, detail="No hay conversación para generar el plan")
+
+        resultado = auditor_llm2()
+        return {
+            "mensaje": "✅ Plan estratégico generado correctamente",
+            "plan": resultado
+        }
+
+    except Exception as e:
+        print("❌ Error en /generar_plan endpoint:")
+        print(traceback.format_exc())
+        raise HTTPException(status_code=500, detail=f"Error interno: {str(e)}")
+
+
+# ========================
+# 17. Endpoint Documento Estratégico en JSON (agent2)
+# ========================
+@app.get("/generar_plan/json")
+def generar_plan_json():
+    """Devuelve el plan estratégico directamente en formato JSON"""
+    try:
+        if not os.path.exists(TEMP_JSON_PATH2):
+            raise HTTPException(status_code=404, detail="No hay conversación para generar el plan")
+
+        resultado = auditor_llm2()
+        with open(TEMP_JSON_PATH2, "w", encoding="utf-8") as f:
+            json.dump(resultado, f, ensure_ascii=False, indent=4)
+
+        return resultado
+
+    except Exception as e:
+        print("❌ Error en /generar_plan/json endpoint:")
+        print(traceback.format_exc())
+        raise HTTPException(status_code=500, detail=f"Error interno: {str(e)}")
+
 
 # ========================
 # 11. Entrypoint Uvicorn
