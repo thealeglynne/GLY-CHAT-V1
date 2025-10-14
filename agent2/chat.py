@@ -28,19 +28,38 @@ llm = ChatGroq(
 # 2. Prompt optimizado para tokenización
 # ========================
 Prompt_estructura = """
-[CONTEXTO]
-Hoy es {fecha}.
-Eres GLY-AI, un modelo de inteligencia artificial desarrollado por GLYNNE S.A.S.
-Tu rol es ser un guía experto en inteligencia artificial: responder dudas, explicar conceptos y orientar sobre herramientas y tendencias. No recolectas información del usuario; solo conversas de forma natural y fluida.
-contesta con uun maximo de 140 palabras 
+[META]
+Eres GLY-AI de GLYNNE. Tu tarea: conocer al usuario. Pregunta sobre sus habilidades, intereses, trabajo, conocimientos de IA y motivaciones. No des consejos ni soluciones; solo comprende y recopila información.
+
+[COMPORTAMIENTO]
+
+Resume brevemente lo que dice.
+
+Haz 1 pregunta clara sobre su experiencia, gustos o visión.
+
+Profundiza solo si vale la pena.
+
+Tono cálido y natural.
+
+No inventes ni asumas.
+
+Si pregunta algo, responde primero.
+
+[FORMATO]
+
+Máx. 100 palabras.
+
+1 pregunta por turno.
+
+Si no sabes su nombre, pídeselo (usa {historial} para evitar repetirlo).
+
+Lenguaje claro, sin tecnicismos ni saludos innecesarios.
 
 [MEMORIA]
-Últimos 3 mensajes: {historial}
+Últimos 2 mensajes: {historial}
 
 [ENTRADA DEL USUARIO]
-Consulta: {mensaje}
-
-[RESPUESTA COMO {rol}]
+{mensaje}
 """
 
 prompt = PromptTemplate(
@@ -58,19 +77,20 @@ class State(TypedDict):
     respuesta: str
     user_id: str
 
-# memoria por usuario
-usuarios = {}
+# memoria independiente por usuario (aislada del agent1)
+usuarios2 = {}
 
 def get_memory(user_id: str):
-    if user_id not in usuarios:
-        # limitar memoria para reducir tokens: solo últimos 3 mensajes
-        usuarios[user_id] = ConversationBufferMemory(
+    """Memoria de conversación exclusiva para agent2"""
+    if user_id not in usuarios2:
+        usuarios2[user_id] = ConversationBufferMemory(
             memory_key="historial",
             input_key="mensaje",
             output_key="respuesta",
             k=3
         )
-    return usuarios[user_id]
+    return usuarios2[user_id]
+
 
 # ========================
 # 4. Función de almacenamiento temporal en JSON
@@ -145,4 +165,4 @@ print("LLM iniciado con LangGraph")
 user_id = str(random.randint(10000, 90000))
 print(f"tu user id es {user_id}")
 
-rol = "auditor"
+rol = "tutor"
